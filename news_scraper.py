@@ -14,6 +14,10 @@ import json
 import time
 from datetime import datetime
 from typing import List, Dict, Optional
+from urllib.parse import urlparse
+
+# 常量定义 / Constants
+MIN_TITLE_LENGTH = 5  # 最小标题长度 / Minimum title length
 
 
 class NewsScraper:
@@ -31,6 +35,32 @@ class NewsScraper:
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
         }
     
+    def _validate_url(self, url: str) -> bool:
+        """
+        验证URL是否安全
+        Validate if URL is safe
+        
+        Args:
+            url: 要验证的URL / URL to validate
+            
+        Returns:
+            是否安全 / Whether the URL is safe
+        """
+        try:
+            parsed = urlparse(url)
+            # 只允许HTTP和HTTPS协议 / Only allow HTTP and HTTPS
+            if parsed.scheme not in ['http', 'https']:
+                return False
+            # 阻止访问本地地址 / Block access to local addresses
+            if parsed.hostname in ['localhost', '127.0.0.1', '0.0.0.0'] or \
+               (parsed.hostname and parsed.hostname.startswith('192.168.')) or \
+               (parsed.hostname and parsed.hostname.startswith('10.')) or \
+               (parsed.hostname and parsed.hostname.startswith('172.16.')):
+                return False
+            return True
+        except Exception:
+            return False
+    
     def fetch_page(self, url: str) -> Optional[str]:
         """
         获取网页内容
@@ -42,6 +72,11 @@ class NewsScraper:
         Returns:
             网页HTML内容，失败返回None / HTML content, None if failed
         """
+        # 验证URL安全性 / Validate URL security
+        if not self._validate_url(url):
+            print(f"Invalid or unsafe URL: {url}")
+            return None
+            
         try:
             response = requests.get(url, headers=self.headers, timeout=self.timeout)
             response.raise_for_status()
@@ -78,7 +113,7 @@ class NewsScraper:
             title = link.get_text(strip=True)
             
             # 过滤有效的新闻链接 / Filter valid news links
-            if title and len(title) > 5 and href:
+            if title and len(title) > MIN_TITLE_LENGTH and href:
                 # 处理相对URL / Handle relative URLs
                 if href.startswith('/'):
                     href = base_url + href
@@ -164,7 +199,6 @@ class NewsScraper:
             return []
         
         # 提取基础URL / Extract base URL
-        from urllib.parse import urlparse
         parsed = urlparse(url)
         base_url = f"{parsed.scheme}://{parsed.netloc}"
         
